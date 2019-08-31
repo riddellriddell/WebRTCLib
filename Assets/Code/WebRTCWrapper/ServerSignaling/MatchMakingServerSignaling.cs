@@ -47,6 +47,8 @@ namespace Networking
 
         public event MessageReceived m_evtMessageReceived;
 
+        public Queue<Tuple<int, string>> m_messagesRecieved;
+
         public Role PeerRole { get; private set; }
 
         //the lobby to connect to 
@@ -119,16 +121,16 @@ namespace Networking
                 };
 
                 //get the communications channel
-                var wwwComsListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress);
+                var wwwComsListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress,new byte[0]);
 
                 yield return wwwComsListen.SendWebRequest();
 
               
 
                 //check if listener listening for connections or connector making connections 
-                if (!wwwConenctionRequest.isNetworkError && !wwwConenctionRequest.isHttpError)
+                if (!wwwComsListen.isNetworkError && !wwwComsListen.isHttpError)
                 {
-                    string strMessage = www.downloadHandler.text;
+                    string strMessage = wwwComsListen.downloadHandler.text;
 
                     if (string.IsNullOrEmpty(strMessage) == false)
                     {
@@ -147,26 +149,26 @@ namespace Networking
                 //check for 
                 if(LobbyID.HasValue == false)
                 {
-                    return;
+                    yield return null;
                 }
 
                 //get the communications channel
-                var wwwLobbyListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress);
+                var wwwLobbyListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress, new byte[0]);
 
                 //wait for server reply 
-                yield return wwwLobbyListen.SendRequest();
+                yield return wwwLobbyListen.SendWebRequest();
 
                 //check if request succeded 
                 if (!wwwLobbyListen.isNetworkError && !wwwLobbyListen.isHttpError)
                 {
-                    string strMessage = www.downloadHandler.text;
+                    string strMessage = wwwLobbyListen.downloadHandler.text;
 
                     if (string.IsNullOrEmpty(strMessage) == false)
                     {
                         //get list of all communications sent to owner of lobby 
-                        GetLobyComsReply glrLobbyReply = JsonUtility.FromJson<GetLobyComsReply>(json);
+                        GetLobyComsReply glrLobbyReply = JsonUtility.FromJson<GetLobyComsReply>(strMessage);
 
-                        if (lcdLobbyComs != null)
+                        if (glrLobbyReply != null)
                         {
                             for(int i = 0; i < glrLobbyReply.Coms.Count; i++)
                             {
@@ -184,18 +186,21 @@ namespace Networking
 
         public IEnumerable PostComs(int iComTarget = 0)
         {
-
+            yield return null;
         }
 
         protected void ProcessRawComsMessage(int messageSource, string strRawMessage)
         {
-            string[] strMessageList = strRawMessage.Split(strRawMessage, MatchMakingServerConstants.s_strSignalSepparationCharacter);
+            string[] strMessageList = strRawMessage.Split(MatchMakingServerConstants.s_strSignalSepparationCharacter.ToCharArray()[0]);
 
             foreach (string strIndividualMessage in strMessageList)
             {
                 //check for empty
-                if (strIndividualMessage != " ")
+                if (string.IsNullOrWhiteSpace(strIndividualMessage) == false)
                 {
+                    //store message 
+                    m_messagesRecieved.Enqueue(new Tuple<int, string>(messageSource, strIndividualMessage));
+
                     //fire event for message 
                     m_evtMessageReceived(messageSource, strIndividualMessage);
                 }

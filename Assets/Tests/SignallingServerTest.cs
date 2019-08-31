@@ -53,7 +53,7 @@ namespace Tests
 
                     if (m_fTimeUntilReplyReady <= 0)
                     {
-                        m_evtReplyReady?.Invoke(c_strOffer);
+                        m_evtReplyReady?.Invoke(c_strReply);
                     }
                 }
 
@@ -64,7 +64,7 @@ namespace Tests
 
                     if (m_fTimeUntilNextIce <= 0)
                     {
-                        m_evtIceReady?.Invoke(c_strOffer);
+                        m_evtIceReady?.Invoke(c_strIceCandidate);
 
                         if(--m_iIceRemaining > 0)
                         {
@@ -142,7 +142,7 @@ namespace Tests
         public IEnumerator CreateConnectionTest()
         {
             //get game lobby
-           
+
             //if listener pole for communications 
 
             //loop through all active connections
@@ -162,16 +162,17 @@ namespace Tests
             //apply offer to rtc
 
             //apply ice to rtc 
+            yield return null;
         }
 
         public IEnumerator CreateConnection()
         {
-
+            yield return null;
         }
 
         public IEnumerator ListenForConnections()
         {
-
+            yield return null;
         }
     }
 }
