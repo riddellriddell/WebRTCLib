@@ -10,8 +10,11 @@ namespace Networking
     {
         public static class MatchMakingServerConstants
         {
+            public const string s_strAPIRouting = "api";
+            public const string s_strLobbyRouting = "GameLobbie";
+            public const string s_strMessageRouting = "Messages";
+            public const string s_strLobbyMatchMakingRouting = "matchmake";
             public const string s_strChannelExtension = "";
-            public const string s_strLobbyExtension = "";
             public const string s_strSignalSepparationCharacter = "|";
         }
 
@@ -42,6 +45,8 @@ namespace Networking
             Listener,
             Connector
         }
+        
+        public ServerConnectionSettings m_scsServerConnectionSettings;
 
         public delegate void MessageReceived(int id, string strMessage);
 
@@ -49,161 +54,257 @@ namespace Networking
 
         public Queue<Tuple<int, string>> m_messagesRecieved;
 
-        public Role PeerRole { get; private set; }
+        public Role PeerRole { get; private set; } = Role.None;
+        
+        public GameLobby m_glbGameLobby;
 
-        //the lobby to connect to 
-        public int? LobbyID { get; private set; } = null;
+        public PlayerProfile m_plpPlayerProfile;
 
-        //the specific coms channel to communicate through if role is connecting 
-        public int? ComsID { get; private set; } = null;
+        public TimeSpan m_tspTimeBetweenServerUpdates = TimeSpan.FromSeconds(2);
 
-        public ServerConnectionSettings m_scsServerConnectionSettings;
+        protected DateTime m_dtmTimeOfLastServerCheck = DateTime.MinValue;
 
         //start the process for connecting to a match
         public IEnumerator ConnectToMatchMakingServer()
         {
+            // use existing player profile if it exists else use default and request a new profile from the server
+            int iPlayerProfileID = m_plpPlayerProfile == null ? int.MinValue : m_plpPlayerProfile.Id;
+
+
             //indicate trying to connect 
             PeerRole = Role.Negotiating;
 
-            //send request for game 
-            var wwwConenctionRequest = UnityWebRequest.Get(m_scsServerConnectionSettings.m_strMatchMakingServerAddress + "data/" + SystemInfo.deviceUniqueIdentifier);
+            //Get game lobby and player profile
+            IEnumerator enmTask = GetMatchAndPlayerDetails(iPlayerProfileID);
 
-            yield return wwwConenctionRequest.SendWebRequest();
-
-            //reset peer role in case message is returned correctly 
-            PeerRole = Role.None;
-
-            //check if listener listening for connections or connector making connections 
-            if (!wwwConenctionRequest.isNetworkError && !wwwConenctionRequest.isHttpError)
+            while(enmTask.MoveNext())
             {
-                var json = wwwConenctionRequest.downloadHandler.text;
+                yield return null;
+            }
 
-                GetLobbyReply glrLobbyReply = JsonUtility.FromJson<GetLobbyReply>(json);
+            //check if profile and lobby was found
+            if(m_plpPlayerProfile == null || m_glbGameLobby == null)
+            {
+                Debug.LogError("Player profile and game lobby was not found");
+                PeerRole = Role.None;
+                yield break;
+            }
 
-                // if the message is good
-                if (glrLobbyReply != null)
-                {
-                    LobbyID = glrLobbyReply.Id;
-
-                    // depending on what type of message we get, we'll handle it differently
-                    // this is the "glue" that allows two peers to establish a connection.
-                    if (glrLobbyReply.IsExistingLobby == true)
-                    {
-                        //connecting to an existing lobby 
-                        PeerRole = Role.Connector;
-                    }
-                    else
-                    {
-                        //first peer in lobby listen for others joining 
-                        PeerRole = Role.Listener;
-                    }
-                }
+            //check if player is in charge of the lobby 
+            if(m_plpPlayerProfile.Id == m_glbGameLobby.Id)
+            {
+                PeerRole = Role.Listener;
+            }
+            else
+            {
+                PeerRole = Role.Connector;
             }
         }
 
-        public IEnumerable ListenForComs()
+        public void SetupDefaultNetworkingSettings()
         {
-            //get communications 
-            if (PeerRole == Role.Connector)
+            if (m_scsServerConnectionSettings == null)
             {
-                //check if coms channel has been opened 
-                if (ComsID.HasValue == false)
-                {
-                    yield return null;
-                }
+                m_scsServerConnectionSettings = ScriptableObject.CreateInstance<ServerConnectionSettings>();
 
-                //build the queery 
-                UpdateChannel upcChannelUpdate = new UpdateChannel()
-                {
-                    Owner = true,
-                    IsWriteCommand = false,
-                    Data = null
-                };
-
-                //get the communications channel
-                var wwwComsListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress,new byte[0]);
-
-                yield return wwwComsListen.SendWebRequest();
-
-              
-
-                //check if listener listening for connections or connector making connections 
-                if (!wwwComsListen.isNetworkError && !wwwComsListen.isHttpError)
-                {
-                    string strMessage = wwwComsListen.downloadHandler.text;
-
-                    if (string.IsNullOrEmpty(strMessage) == false)
-                    {
-                        Tuple<int, string> glrLobbyReply = JsonUtility.FromJson<Tuple<int, string>>(strMessage);
-
-                        if (glrLobbyReply != null)
-                        {
-                            //fire event for message 
-                            ProcessRawComsMessage(glrLobbyReply.Item1, glrLobbyReply.Item2);
-                        }
-                    }
-                }
-            }
-            else if (PeerRole == Role.Listener)
-            {
-                //check for 
-                if(LobbyID.HasValue == false)
-                {
-                    yield return null;
-                }
-
-                //get the communications channel
-                var wwwLobbyListen = UnityWebRequest.Put(m_scsServerConnectionSettings.m_strMatchMakingServerAddress, new byte[0]);
-
-                //wait for server reply 
-                yield return wwwLobbyListen.SendWebRequest();
-
-                //check if request succeded 
-                if (!wwwLobbyListen.isNetworkError && !wwwLobbyListen.isHttpError)
-                {
-                    string strMessage = wwwLobbyListen.downloadHandler.text;
-
-                    if (string.IsNullOrEmpty(strMessage) == false)
-                    {
-                        //get list of all communications sent to owner of lobby 
-                        GetLobyComsReply glrLobbyReply = JsonUtility.FromJson<GetLobyComsReply>(strMessage);
-
-                        if (glrLobbyReply != null)
-                        {
-                            for(int i = 0; i < glrLobbyReply.Coms.Count; i++)
-                            {
-                                if(string.IsNullOrWhiteSpace(glrLobbyReply.Coms[i].Item2) == false)
-                                {
-                                    //fire off message recieved event 
-                                    ProcessRawComsMessage(glrLobbyReply.Coms[i].Item1, glrLobbyReply.Coms[i].Item2);
-                                }
-                            }
-                        }
-                    }
-                }            
+                m_scsServerConnectionSettings.m_strMatchMakingServerAddress = "https://localhost:44322";
             }
         }
 
-        public IEnumerable PostComs(int iComTarget = 0)
+        public IEnumerator UpdateMessages()
         {
-            yield return null;
+            //check if it is time to fetch more messages from the server 
+            if(DateTime.UtcNow - m_dtmTimeOfLastServerCheck < m_tspTimeBetweenServerUpdates)
+            {
+                yield break;
+            }
+
+            m_dtmTimeOfLastServerCheck = DateTime.UtcNow;
+
+            // check if player profile is set up
+            if(m_plpPlayerProfile == null)
+            {
+                yield break;
+            }
+
+            yield return GetMessages(m_plpPlayerProfile.Id);
+
         }
 
-        protected void ProcessRawComsMessage(int messageSource, string strRawMessage)
+        //try and get player profile from server 
+        public IEnumerator GetPlayerProfile()
         {
-            string[] strMessageList = strRawMessage.Split(MatchMakingServerConstants.s_strSignalSepparationCharacter.ToCharArray()[0]);
+            yield break;
+        }
 
-            foreach (string strIndividualMessage in strMessageList)
+        // ask the server to find a lobby using the prefered player id
+        // if the prefered player id does not exists a new player is created and returned
+        // if no non full lobbies exist a new lobby is created
+        public IEnumerator GetMatchAndPlayerDetails(int iPlayerProfileId)
+        {
+
+            //create address string 
+            string strMatchMakingServer = m_scsServerConnectionSettings.m_strMatchMakingServerAddress;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strAPIRouting;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strLobbyRouting;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strLobbyMatchMakingRouting;
+
+            //get the communications channel
+            var wwwComsListen = UnityWebRequest.Post(strMatchMakingServer, iPlayerProfileId.ToString());
+            wwwComsListen.certificateHandler = new CustomHttpsCert();
+            wwwComsListen.SetRequestHeader("Content-Type", "application/json");
+            wwwComsListen.timeout = 20;
+            yield return wwwComsListen.SendWebRequest();
+
+            //get result 
+            if (wwwComsListen.isHttpError || wwwComsListen.isNetworkError)
             {
-                //check for empty
-                if (string.IsNullOrWhiteSpace(strIndividualMessage) == false)
-                {
-                    //store message 
-                    m_messagesRecieved.Enqueue(new Tuple<int, string>(messageSource, strIndividualMessage));
+                string errorType = wwwComsListen.isHttpError ? ("http") : ("net");
+                Debug.Log($"error:{errorType} {wwwComsListen.error}");
+                //get match failed quit
+                yield break;
+            }
 
-                    //fire event for message 
-                    m_evtMessageReceived(messageSource, strIndividualMessage);
+            Debug.Log("Result:" + wwwComsListen.downloadHandler.text);
+
+            try
+            {
+                Tuple<GameLobby, PlayerProfile> tupServerResponse = JsonUtility.FromJson<Tuple<GameLobby, PlayerProfile>>(wwwComsListen.downloadHandler.text);
+                m_glbGameLobby = tupServerResponse.Item1;
+                m_plpPlayerProfile = tupServerResponse.Item2;
+            }
+            catch
+            {
+                Debug.Log("Error deserializing server response");
+            }
+
+        }
+
+        // try and make a lobby with the target id and attached to the target player id
+        // if the lobby already exists the player id will be changed to the new player id 
+        public IEnumerator MakeMatchAndPlayerProfile(int iPreferedLobbyID, int iPreferedPlayerId)
+        {
+            //create address string 
+            string strMatchMakingServer = m_scsServerConnectionSettings.m_strMatchMakingServerAddress;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strAPIRouting;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strLobbyRouting;
+
+            //create json string 
+            string strJson = JsonUtility.ToJson(new Tuple<int, int>(iPreferedLobbyID, iPreferedPlayerId));
+
+            //get the communications channel
+            var wwwComsListen = UnityWebRequest.Post(strMatchMakingServer, strJson);
+            wwwComsListen.certificateHandler = new CustomHttpsCert();
+            wwwComsListen.SetRequestHeader("Content-Type", "application/json");
+            wwwComsListen.timeout = 20;
+            yield return wwwComsListen.SendWebRequest();
+
+            //get result 
+            if (wwwComsListen.isHttpError || wwwComsListen.isNetworkError)
+            {
+                string errorType = wwwComsListen.isHttpError ? ("http") : ("net");
+                Debug.Log($"error:{errorType} {wwwComsListen.error}");
+                //get match failed quit
+                yield break;
+            }
+
+            Debug.Log("Result:" + wwwComsListen.downloadHandler.text);
+
+            try
+            {
+                Tuple<GameLobby, PlayerProfile> tupServerResponse = JsonUtility.FromJson<Tuple<GameLobby, PlayerProfile>>(wwwComsListen.downloadHandler.text);
+                m_glbGameLobby = tupServerResponse.Item1;
+                m_plpPlayerProfile = tupServerResponse.Item2;
+            }
+            catch
+            {
+                Debug.Log("Error deserializing server response");
+            }
+        }
+
+        // get messages for player from server
+        public IEnumerator GetMessages(int iPlayerID)
+        {
+            //create address string 
+            string strMatchMakingServer = m_scsServerConnectionSettings.m_strMatchMakingServerAddress;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strAPIRouting;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strMessageRouting;
+            strMatchMakingServer += "/" + iPlayerID.ToString();
+
+            //get the communications channel
+            var wwwComsListen = UnityWebRequest.Post(strMatchMakingServer, "");
+            wwwComsListen.certificateHandler = new CustomHttpsCert();
+            wwwComsListen.SetRequestHeader("Content-Type", "application/json");
+            wwwComsListen.timeout = 20;
+            yield return wwwComsListen.SendWebRequest();
+
+            //get result 
+            if (wwwComsListen.isHttpError || wwwComsListen.isNetworkError)
+            {
+                string errorType = wwwComsListen.isHttpError ? ("http") : ("net");
+                Debug.Log($"error:{errorType} {wwwComsListen.error}");
+                //get match failed quit
+                yield break;
+            }
+
+            Debug.Log("Result:" + wwwComsListen.downloadHandler.text);
+
+            try
+            {
+                List<Tuple<int, string>> tupMessagesFromServer = JsonUtility.FromJson<List<Tuple<int, string>>>(wwwComsListen.downloadHandler.text);
+                for (int i = 0; i < tupMessagesFromServer.Count; i++)
+                {
+                    ProcessRawComsMessage(tupMessagesFromServer[i].Item1, tupMessagesFromServer[i].Item2);
                 }
+            }
+            catch
+            {
+                Debug.Log("Error deserializing server response");
+            }
+
+        }
+
+        // send message to taget player
+        public IEnumerator SendMessage(int iFromPlayerID, int iToPlayerID, string strMessage)
+        {
+            //create address string 
+            string strMatchMakingServer = m_scsServerConnectionSettings.m_strMatchMakingServerAddress;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strAPIRouting;
+            strMatchMakingServer += "/" + MatchMakingServerConstants.s_strMessageRouting;
+
+            string strJson = JsonUtility.ToJson(new Tuple<int, int, string>(iFromPlayerID, iToPlayerID, strMessage));
+
+            //get the communications channel
+            var wwwComsListen = UnityWebRequest.Post(strMatchMakingServer, strJson);
+            wwwComsListen.certificateHandler = new CustomHttpsCert();
+            wwwComsListen.SetRequestHeader("Content-Type", "application/json");
+            wwwComsListen.timeout = 20;
+            yield return wwwComsListen.SendWebRequest();
+
+            //get result 
+            if (wwwComsListen.isHttpError || wwwComsListen.isNetworkError)
+            {
+                string errorType = wwwComsListen.isHttpError ? ("http") : ("net");
+                Debug.Log($"error:{errorType} {wwwComsListen.error}");
+                //get match failed quit
+                yield break;
+            }
+
+            Debug.Log("Result:" + wwwComsListen.downloadHandler.text);
+
+        }
+
+        //process messages and fire events
+        protected void ProcessRawComsMessage(int messageSource, string strMessage)
+        {
+            //check for empty
+            if (string.IsNullOrWhiteSpace(strMessage) == false)
+            {
+                //store message 
+                m_messagesRecieved.Enqueue(new Tuple<int, string>(messageSource, strMessage));
+
+                //fire event for message 
+                m_evtMessageReceived(messageSource, strMessage);
             }
         }
     }

@@ -82,10 +82,10 @@ public class TestRunWindow : EditorWindow
             var buildOptions = BuildOptions.AllowDebugging;
                 buildOptions |= BuildOptions.Development;
 
-            BuildTools.BuildGame(GetBuildPath(buildTarget), GetBuildExeName(buildTarget), buildTarget, buildOptions, "AutoBuild", m_IL2CPP);
+            //BuildTools.BuildGame(GetBuildPath(buildTarget), GetBuildExeName(buildTarget), buildTarget, buildOptions, "AutoBuild", m_IL2CPP);
 
-            if (action == BuildAction.BuildAndRun)
-                RunBuild("");
+           // if (action == BuildAction.BuildAndRun)
+           //     RunBuild("");
             GUIUtility.ExitGUI(); // prevent warnings from gui about unmatched layouts
         }
         if (GUILayout.Button("Test"))

@@ -26,8 +26,7 @@ namespace Networking
             Disconnected,
             Failed
         }
-
-
+        
         public List<string> m_strMessages;
 
         public Tuple<string,string> m_tupOffer;
