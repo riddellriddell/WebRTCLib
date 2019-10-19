@@ -2,9 +2,10 @@
 
 namespace Networking
 {
+    [System.Serializable]
     public class PlayerProfile
     {
-        public int Id { get; set; }
-        public DateTime TimeOfLastActivity { get; set; }
+        public int Id;
+        public long TimeOfLastActivity;
     }
 }

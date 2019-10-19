@@ -91,7 +91,8 @@ namespace Tests
         public void WebRtcNativeTestSimplePasses()
         {
             // Use the Assert class to test conditions
-            IPeer nativePeer = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
+            // IPeer nativePeer = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
+            IPeer nativePeer = new SocketsPeer();
 
             nativePeer.LocalSdpReadytoSend -= CreatOfferCallback;
             nativePeer.LocalSdpReadytoSend += CreatOfferCallback;
@@ -121,8 +122,10 @@ namespace Tests
         public IEnumerator WebRtcNativeTestWithEnumeratorPasses()
         {
 
-            IPeer nativePeer1 = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
-            IPeer nativePeer2 = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
+            //IPeer nativePeer1 = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
+            //IPeer nativePeer2 = new NativePeer(IceServers.Select(i => i.ToString()).ToList(), string.Empty, string.Empty);
+            IPeer nativePeer1 = new SocketsPeer();
+            IPeer nativePeer2 = new SocketsPeer();
 
             WebRTCWrapper wrwPeer1 = new WebRTCWrapper(nativePeer1);
             WebRTCWrapper wrwPeer2 = new WebRTCWrapper(nativePeer2);
@@ -138,10 +141,10 @@ namespace Tests
                 yield return null;
             }
 
-            Debug.Log($"Offer finished {wrwPeer1.m_tupIceCandidates.Count} ice candidates created");
+            Debug.Log($"Offer finished {wrwPeer1.m_iceOfferIceCandidates.Count} ice candidates created");
 
             //send offer to connection 2
-            wrwPeer2.ProcessOfferAndMakeReply(wrwPeer1.m_tupOffer.Item2);
+            wrwPeer2.ProcessOfferAndMakeReply(wrwPeer1.m_ofrOffer.m_strValue);
 
             DateTime now = DateTime.UtcNow;
             while ((DateTime.UtcNow - now).TotalSeconds < 3)
@@ -152,11 +155,11 @@ namespace Tests
             Debug.Log("Reply started");
 
             //send all ice candidates 
-            for(int i = 0; i < wrwPeer1.m_tupIceCandidates.Count; i++)
+            for(int i = 0; i < wrwPeer1.m_iceOfferIceCandidates.Count; i++)
             {
                 Debug.Log("processing Ice Candidate sent to peer 2");
-                Tuple<string, int, string> ice = wrwPeer1.m_tupIceCandidates[i];
-                wrwPeer2.AddICE(ice.Item1, ice.Item2, ice.Item3);
+                WebRTCWrapper.IceCandidate ice = wrwPeer1.m_iceOfferIceCandidates[i];
+                wrwPeer2.AddICE(ice.m_strType, ice.m_iIndex, ice.m_strValue);
             }
 
             Debug.Log("Ice Candidate processing finished Reply started, waiting for ice");
@@ -167,10 +170,10 @@ namespace Tests
                 yield return null;
             }
 
-            Debug.Log($"Reply ice finished {wrwPeer2.m_tupIceCandidates.Count} ice candidates created sending answer");
+            Debug.Log($"Reply ice finished {wrwPeer2.m_iceOfferIceCandidates.Count} ice candidates created sending answer");
 
             //send reply back to source 
-            wrwPeer1.ProcessReply(wrwPeer2.m_tupReply.Item2);
+            wrwPeer1.ProcessReply(wrwPeer2.m_repReply.m_strValue);
 
             now = DateTime.UtcNow;
             while ((DateTime.UtcNow - now).TotalSeconds < 3)
@@ -181,11 +184,11 @@ namespace Tests
             Debug.Log("Answer process finished waiting on ice processing");
 
             //process all the ice candidates
-            for(int i = 0; i < wrwPeer2.m_tupIceCandidates.Count; i++)
+            for(int i = 0; i < wrwPeer2.m_iceOfferIceCandidates.Count; i++)
             {
                 Debug.Log("processing Ice Candidate sent to peer 1");
-                Tuple<string, int, string> ice = wrwPeer2.m_tupIceCandidates[i];
-                wrwPeer1.AddICE(ice.Item1, ice.Item2, ice.Item3);
+                WebRTCWrapper.IceCandidate ice = wrwPeer2.m_iceOfferIceCandidates[i];
+                wrwPeer1.AddICE(ice.m_strType, ice.m_iIndex, ice.m_strValue);
             }
 
             Debug.Log("Ice processing finished waiting for connection");

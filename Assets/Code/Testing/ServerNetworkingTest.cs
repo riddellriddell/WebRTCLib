@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace Networking
 {
@@ -34,7 +35,10 @@ namespace Networking
 
             if(m_mmsSignalling.PeerRole == MatchMakingServerSignaling.Role.Connector)
             {
-               // m_mmsSignalling.PostComs();
+                int iFromID = m_mmsSignalling.m_plpPlayerProfile.Id;
+                int iToID = m_mmsSignalling.m_glbGameLobby.OwnerId;
+
+               m_mmsSignalling.SendMessage(iFromID, iToID, "TestMessage");
             }
 
             while(m_mmsSignalling.PeerRole == MatchMakingServerSignaling.Role.Listener)

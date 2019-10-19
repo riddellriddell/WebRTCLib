@@ -1,14 +1,13 @@
-﻿using MatchMakingServer.Model;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using UnityEngine;
 
-namespace MatchMakingServer.ReturnTypes
+namespace Networking
 {
+    [System.Serializable]
     public class CreateLobbyClass
     {
+        [SerializeField]
         public PlayerProfile playerProfile;
+        [SerializeField]
         public GameLobby gameLobby;
     }
 }
