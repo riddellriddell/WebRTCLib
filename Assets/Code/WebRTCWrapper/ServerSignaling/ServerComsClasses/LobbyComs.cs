@@ -10,4 +10,15 @@ namespace Networking
         [SerializeField]
         public GameLobby gameLobby;
     }
+
+    [System.Serializable]
+    public class UpdateLobby
+    {
+        [SerializeField]
+        public int id;
+        [SerializeField]
+        public int playerCount;
+        [SerializeField]
+        public int state;
+    }
 }

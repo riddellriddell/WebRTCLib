@@ -185,13 +185,13 @@ public class SocketsPeer : IPeer
         }
         catch
         {
-            Debug.LogError("Error deserializing offer");
+            Debug.LogError($"Error deserializing offer {sdp}");
             return;
         }
 
         if(ipaAddress == null)
         {
-            Debug.LogError("Failed to deserialize IpAddres Message");
+            Debug.LogError($"Failed to deserialize IpAddres Message {sdp}");
             return;
         }  
 
@@ -224,8 +224,13 @@ public class SocketsPeer : IPeer
             Debug.LogError($"Failed to connect to address ip: {ipTargetAddress.ToString()} port:{ipaAddress.port.ToString()} due to error {excException.Message}");
         }
 
-        //try and send inital connect message
-        SendDataViaDataChannel(c_strConnectionOpenMessage);
+        //check if connection ready for connection test
+        if(m_udpUdpSend != null && m_udpUdpListen != null)
+        {
+            //try and send inital connect message
+            SendDataViaDataChannel(c_strConnectionOpenMessage);
+        }
+
     }
     
     private IPAddress GetLocalIPAddress()

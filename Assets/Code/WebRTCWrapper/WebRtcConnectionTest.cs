@@ -175,7 +175,6 @@ public class WebRtcConnectionTest : MonoBehaviour
             strOutput = $"SettingUP {strThink}";
         }
 
-
         m_txtOuput.text = strOutput;
     }
 
@@ -195,6 +194,9 @@ public class WebRtcConnectionTest : MonoBehaviour
     {
         // get messages
         StartCoroutine(m_mssServerSignalling.UpdateMessages());
+
+        //update lobby 
+        StartCoroutine(m_mssServerSignalling.UpdateGameLobby(m_mssServerSignalling.m_glbGameLobby.Id,0,0));
 
         // check if message is connection offer
         while (m_mssServerSignalling.m_messagesRecieved.Count > 0)
@@ -314,8 +316,7 @@ public class WebRtcConnectionTest : MonoBehaviour
         public int item1;
         public string item2;
     }
-
-
+    
     public void Test()
     {
         Debug.Log("Test Serialization");
